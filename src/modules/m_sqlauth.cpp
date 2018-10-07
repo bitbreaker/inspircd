@@ -40,14 +40,63 @@ class AuthQuery : public SQLQuery
 	{
 	}
 	
+	int wildcmp(const char *wild, const char *string) {
+		  // Written by Jack Handy - <A href="mailto:jakkhandy@hotmail.com">jakkhandy@hotmail.com</A>
+		  const char *cp = NULL, *mp = NULL;
+
+		  while ((*string) && (*wild != '*')) {
+			if ((*wild != *string) && (*wild != '?')) {
+			  return 0;
+			}
+			wild++;
+			string++;
+		  }
+
+		  while (*string) {
+			if (*wild == '*') {
+			  if (!*++wild) {
+				return 1;
+			  }
+			  mp = wild;
+			  cp = string+1;
+			} else if ((*wild == *string) || (*wild == '?')) {
+			  wild++;
+			  string++;
+			} else {
+			  wild = mp;
+			  string = cp++;
+			}
+		  }
+
+		  while (*wild == '*') {
+			wild++;
+		  }
+		  return !*wild;
+	}
+	
+	
 	void OnResult(SQLResult& res)
 	{
 		User* user = ServerInstance->FindNick(uid);
+		SQLEntries row;
+		
 		if (!user)
 			return;
-		if (res.Rows())
+		if (res.GetRow(row))
 		{
-			pendingExt.set(user, AUTH_STATE_NONE);
+			std::string ip = row[1].value;
+			if (wildcmp(ip.c_str(),user->GetIPString()))
+			{
+				ServerInstance->Logs->Log("SQLATUH",DEFAULT,"Matching %s with %s", ip.c_str(), user->GetIPString());
+				pendingExt.set(user, AUTH_STATE_NONE);
+			}
+			else
+			{
+				if (verbose)
+					ServerInstance->SNO->WriteGlobalSno('a', "Forbidden connection from %s (SQL query returned no matches)", user->GetFullRealHost().c_str());
+				pendingExt.set(user, AUTH_STATE_FAIL);
+			}
+			
 		}
 		else
 		{
@@ -139,6 +188,8 @@ class ModuleSQLAuth : public Module
 		if (sha256)
 			userinfo["sha256pass"] = sha256->hexsum(user->password);
 
+		ServerInstance->Logs->Log("SQLAUTH",DEFAULT,"Submit Query is: %s", freeformquery.c_str());
+		
 		SQL->submit(new AuthQuery(this, user->uuid, pendingExt, verbose), freeformquery, userinfo);
 
 		return MOD_RES_PASSTHRU;

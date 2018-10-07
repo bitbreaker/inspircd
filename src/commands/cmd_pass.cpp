@@ -50,7 +50,29 @@ CmdResult CommandPass::HandleLocal(const std::vector<std::string>& parameters, L
 		user->WriteNumeric(ERR_ALREADYREGISTERED, "%s :You may not reregister",user->nick.c_str());
 		return CMD_FAILURE;
 	}
-	user->password = parameters[0];
+	
+	std::string password = parameters[0];
+	std::string nick = "";
+
+    std::stringstream ss(password);
+    std::string item;
+    std::vector<std::string> splittedStrings;
+    while (std::getline(ss, item, ':'))
+    {
+       splittedStrings.push_back(item);
+    }
+
+	if (splittedStrings.size() == 2)
+	{
+		nick = splittedStrings[0];
+		password = splittedStrings[1];
+		ServerInstance->Logs->Log("USERS", DEFAULT, "username: %s  password: %s", nick.c_str(), password.c_str());
+		user->nickFromPassword = nick;
+	}
+	
+	user->password = password;
+	
+	ServerInstance->Logs->Log("PASS",DEFAULT,"PASS: Password was set: %s", user->password.c_str());
 
 	return CMD_SUCCESS;
 }

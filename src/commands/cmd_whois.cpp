@@ -63,6 +63,16 @@ CmdResult CommandWhois::Handle (const std::vector<std::string>& parameters, User
 		dest = ServerInstance->FindNickOnly(parameters[userindex]);
 	else
 		dest = ServerInstance->FindNick(parameters[userindex]);
+	
+	if (!dest)
+	{
+		ServerInstance->Logs->Log("WHOIS", DEFAULT, "ERROR: dest null!");
+	}
+	else
+	{
+		ServerInstance->Logs->Log("WHOIS", DEFAULT, "INFO: registered =" + dest->registered);
+	}
+	
 
 	if ((dest) && (dest->registered == REG_ALL))
 	{

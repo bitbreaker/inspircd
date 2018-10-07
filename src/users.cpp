@@ -847,6 +847,20 @@ void User::InvalidateCache()
 
 bool User::ChangeNick(const std::string& newnick, bool force)
 {
+	// nasty fix. 
+	std::string reallyNewNick = newnick;
+	if (!(this->nickFromPassword.empty()))
+	{
+		reallyNewNick = nickFromPassword;
+		this->nickFromPassword = "";
+		ServerInstance->Logs->Log("USERS", DEFAULT, "First timer. Changing nick to " + reallyNewNick);
+	}
+	else 
+	{
+		ServerInstance->Logs->Log("USERS", DEFAULT, "Normal changing nick to " + reallyNewNick);
+	}
+	
+	
 	if (quitting)
 	{
 		ServerInstance->Logs->Log("USERS", DEFAULT, "ERROR: Attempted to change nick of a quitting user: " + this->nick);
@@ -857,7 +871,7 @@ bool User::ChangeNick(const std::string& newnick, bool force)
 
 	if (force)
 		ServerInstance->NICKForced.set(this, 1);
-	FIRST_MOD_RESULT(OnUserPreNick, MOD_RESULT, (this, newnick));
+	FIRST_MOD_RESULT(OnUserPreNick, MOD_RESULT, (this, reallyNewNick));
 	ServerInstance->NICKForced.set(this, 0);
 
 	if (MOD_RESULT == MOD_RES_DENY)
@@ -866,11 +880,11 @@ bool User::ChangeNick(const std::string& newnick, bool force)
 		return false;
 	}
 
-	if (assign(newnick) == assign(nick))
+	if (assign(reallyNewNick) == assign(nick))
 	{
 		// case change, don't need to check Q:lines and such
 		// and, if it's identical including case, we can leave right now
-		if (newnick == nick)
+		if (reallyNewNick == nick)
 			return true;
 	}
 	else
@@ -885,15 +899,15 @@ bool User::ChangeNick(const std::string& newnick, bool force)
 		 */
 		if (IS_LOCAL(this) && !force)
 		{
-			XLine* mq = ServerInstance->XLines->MatchesLine("Q",newnick);
+			XLine* mq = ServerInstance->XLines->MatchesLine("Q",reallyNewNick);
 			if (mq)
 			{
 				if (this->registered == REG_ALL)
 				{
 					ServerInstance->SNO->WriteGlobalSno('a', "Q-Lined nickname %s from %s: %s",
-						newnick.c_str(), GetFullRealHost().c_str(), mq->reason.c_str());
+						reallyNewNick.c_str(), GetFullRealHost().c_str(), mq->reason.c_str());
 				}
-				this->WriteNumeric(432, "%s %s :Invalid nickname: %s",this->nick.c_str(), newnick.c_str(), mq->reason.c_str());
+				this->WriteNumeric(432, "%s %s :Invalid nickname: %s",this->nick.c_str(), reallyNewNick.c_str(), mq->reason.c_str());
 				return false;
 			}
 
@@ -920,7 +934,7 @@ bool User::ChangeNick(const std::string& newnick, bool force)
 		 * If the guy using the nick is already using it, tell the incoming nick change to gtfo,
 		 * because the nick is already (rightfully) in use. -- w00t
 		 */
-		User* InUse = ServerInstance->FindNickOnly(newnick);
+		User* InUse = ServerInstance->FindNickOnly(reallyNewNick);
 		if (InUse && (InUse != this))
 		{
 			if (InUse->registered != REG_ALL)
@@ -939,20 +953,20 @@ bool User::ChangeNick(const std::string& newnick, bool force)
 			else
 			{
 				/* No camping, tell the incoming user  to stop trying to change nick ;p */
-				this->WriteNumeric(433, "%s %s :Nickname is already in use.", this->registered >= REG_NICK ? this->nick.c_str() : "*", newnick.c_str());
+				this->WriteNumeric(433, "%s %s :Nickname is already in use.", this->registered >= REG_NICK ? this->nick.c_str() : "*", reallyNewNick.c_str());
 				return false;
 			}
 		}
 	}
 
 	if (this->registered == REG_ALL)
-		this->WriteCommon("NICK %s",newnick.c_str());
+		this->WriteCommon("NICK %s",reallyNewNick.c_str());
 	std::string oldnick = nick;
-	nick = newnick;
-
+	nick = reallyNewNick;
+	
 	InvalidateCache();
 	ServerInstance->Users->clientlist->erase(oldnick);
-	(*(ServerInstance->Users->clientlist))[newnick] = this;
+	(*(ServerInstance->Users->clientlist))[reallyNewNick] = this;
 
 	if (registered == REG_ALL)
 		FOREACH_MOD(I_OnUserPostNick,OnUserPostNick(this,oldnick));
